@@ -1,12 +1,14 @@
 import streamlit as st
 import random
 import pandas as pd
+from datetime import datetime
 from database import init_db, add_character, get_all_characters, get_character_by_id, update_character, delete_character, add_dice_log, get_recent_logs
+from streamlit_autorefresh import st_autorefresh
 
 import re
 
 # --- Configuration ---
-st.set_page_config(page_title="Old Dragon 2 Manager", page_icon="🐉", layout="wide")
+st.set_page_config(page_title="Rolagem de Dados", page_icon="🎲", layout="wide")
 
 # --- CSS ---
 st.markdown("""
@@ -16,17 +18,40 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { height: 50px; font-weight: bold; }
     .roll-log { font-family: 'Courier New', Courier, monospace; font-size: 0.9em; background: #2d2d2d; padding: 10px; border-radius: 5px; }
     .modifier { font-size: 0.8em; color: #888; }
+    /* Newest log base style */
+    .log-entry {
+        padding: 10px;
+        border-radius: 8px;
+        border-left: 4px solid transparent;
+        transition: border-color 0.5s;
+    }
+    .log-entry-highlighted {
+        border-left: 4px solid #4CAF50;
+    }
+    .dice-square {
+        display: inline-block;
+        border: 1px solid #4CAF50;
+        border-radius: 4px;
+        padding: 2px 6px;
+        margin: 2px;
+        font-family: 'Courier New', Courier, monospace;
+        background-color: #262730;
+        color: #4CAF50;
+        font-weight: bold;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # --- Helpers ---
 def get_modifier(val):
+    if val <= 3: return -3
     if val <= 5: return -2
     if val <= 8: return -1
     if val <= 12: return 0
-    if val <= 15: return 1
-    if val <= 18: return 2
-    return 3 # 19-20
+    if val <= 14: return 1
+    if val <= 16: return 2
+    if val <= 18: return 3
+    return 4 # 19-20
 
 def get_base_jp(level):
     # OD2 Rule: Starts at 5, increases every 2 levels (3, 5, 7...)
@@ -53,7 +78,7 @@ def parse_custom_roll(roll_str):
         
         # Detail string for the log
         rolls_str = ' + '.join(map(str, rolls))
-        mod_str = f" {mod:+}" if mod != 0 else ""
+        mod_str = f" + MOD:{mod:+}" if mod != 0 else ""
         details = f"{total} ({rolls_str}{mod_str})"
         return details
     return None
@@ -62,158 +87,43 @@ def parse_custom_roll(roll_str):
 init_db()
 
 # --- App Title ---
-st.title("🐉 Old Dragon 2 - Gerenciador de Campanha")
+st.title("🎲 Rolagem de Dados")
 
-# --- Sidebar for Player Name ---
-player_name = st.sidebar.text_input("Seu Nome de Jogador", value="Mestre")
+# --- Sidebar Configuration ---
+st.sidebar.info("Rolagem de Dados")
+st.sidebar.markdown("---")
 
-# --- Main Tabs ---
-tab_fichas, tab_dados = st.tabs(["📋 Fichas de Personagem", "🎲 Rolagem de Dados"])
+# --- ROLAGEM DE DADOS ---
+# Auto-refresh every 3 seconds to keep history updated and match animation
+st_autorefresh(interval=3000, limit=None, key="dice_refresh")
 
-# --- TAB: FICHAS ---
-with tab_fichas:
-    col_list, col_details = st.columns([1, 2])
+st.subheader("🎲 Sala de Rolagem")
 
-    with col_list:
-        st.subheader("Meus Personagens")
-        chars = get_all_characters()
-        if not chars:
-            st.write("Nenhum personagem criado.")
-        
-        char_options = {f"{c[1]} ({c[2]} Lvl {c[3]})": c[0] for c in chars}
-        selected_char_label = st.radio("Selecione para ver/editar", ["+ Novo Personagem"] + list(char_options.keys()))
-        
-        selected_id = char_options.get(selected_char_label) if selected_char_label != "+ Novo Personagem" else None
+# Player Name Input on the main page
+player_name = st.text_input("Seu Nome de Personagem / Jogador", value="Mestre")
 
-    with col_details:
-        if selected_id:
-            char_data = get_character_by_id(selected_id)
-            st.subheader(f"Ficha: {char_data['name']}")
-            
-            with st.form("edit_char_form"):
-                c1, c2, c3 = st.columns(3)
-                name = c1.text_input("Nome", char_data['name'])
-                race = c2.text_input("Raça", char_data['race'])
-                char_class = c3.selectbox("Classe", ["Guerreiro", "Mago", "Clérigo", "Ladino"], index=["Guerreiro", "Mago", "Clérigo", "Ladino"].index(char_data['char_class']))
-                
-                c4, c5, c6 = st.columns(3)
-                level = c4.number_input("Nível", 1, 20, char_data['level'])
-                alignment = c5.selectbox("Alinhamento", ["Ordeiro", "Neutro", "Caótico"], index=["Ordeiro", "Neutro", "Caótico"].index(char_data['alignment']))
-                xp = c6.number_input("XP", 0, 1000000, char_data['xp'])
+st.divider()
 
-                st.divider()
-                st.write("### Atributos")
-                a1, a2, a3, a4, a5, a6 = st.columns(6)
-                str_v = a1.number_input("FOR", 3, 20, char_data['str_val'])
-                dex_v = a2.number_input("DES", 3, 20, char_data['dex_val'])
-                con_v = a3.number_input("CON", 3, 20, char_data['con_val'])
-                int_v = a4.number_input("INT", 3, 20, char_data['int_val'])
-                wis_v = a5.number_input("SAB", 3, 20, char_data['wis_val'])
-                cha_v = a6.number_input("CAR", 3, 20, char_data['cha_val'])
-                
-                # Show modifiers
-                a1.caption(f"Mod: {get_modifier(str_v):+}")
-                a2.caption(f"Mod: {get_modifier(dex_v):+}")
-                a3.caption(f"Mod: {get_modifier(con_v):+}")
-                a4.caption(f"Mod: {get_modifier(int_v):+}")
-                a5.caption(f"Mod: {get_modifier(wis_v):+}")
-                a6.caption(f"Mod: {get_modifier(cha_v):+}")
+c_roll, c_log = st.columns([1, 1])
 
-                st.divider()
-                st.write("### Combate & Proteção")
-                
-                # Calculations for JPs
-                base_jp = get_base_jp(level)
-                final_jp_f = base_jp + get_modifier(con_v)
-                final_jp_m = base_jp + get_modifier(wis_v)
-                final_jp_e = base_jp + get_modifier(dex_v)
-
-                p1, p2, p3, p4 = st.columns(4)
-                hp_m = p1.number_input("PV Máx", 1, 200, char_data['hp_max'])
-                hp_c = p2.number_input("PV Atual", 0, 200, char_data['hp_current'])
-                ac = p3.number_input("CA", 0, 30, char_data['ac'])
-                ba = p4.number_input("BA", 0, 20, char_data['ba'])
-                
-                st.write(f"**Valor Base de JP (Nível {level}): {base_jp}**")
-                j1, j2, j3 = st.columns(3)
-                # Displaying JPs as disabled inputs (read-only)
-                jp_f = j1.number_input("JP Física (Base + CON)", value=final_jp_f, disabled=True)
-                jp_m = j2.number_input("JP Mental (Base + SAB)", value=final_jp_m, disabled=True)
-                jp_e = j3.number_input("JP Esquiva (Base + DES)", value=final_jp_e, disabled=True)
-
-                st.divider()
-                inventory = st.text_area("Inventário", char_data['inventory'])
-                
-                m1, m2, m3 = st.columns(3)
-                po = m1.number_input("PO", 0, 999999, char_data['gold_po'])
-                pp = m2.number_input("PP", 0, 999999, char_data['gold_pp'])
-                pc = m3.number_input("PC", 0, 999999, char_data['gold_pc'])
-
-                notes = st.text_area("Notas", char_data['notes'])
-
-                col_btn1, col_btn2 = st.columns(2)
-                if col_btn1.form_submit_button("💾 Salvar Alterações"):
-                    updated_data = {
-                        "name": name, "race": race, "char_class": char_class, "level": level, "alignment": alignment, "xp": xp,
-                        "str_val": str_v, "dex_val": dex_v, "con_val": con_v, "int_val": int_v, "wis_val": wis_v, "cha_val": cha_v,
-                        "hp_max": hp_m, "hp_current": hp_c, "ac": ac, "ba": ba,
-                        "jp_physical": jp_f, "jp_mental": jp_m, "jp_evasion": jp_e,
-                        "inventory": inventory, "gold_po": po, "gold_pp": pp, "gold_pc": pc, "notes": notes
-                    }
-                    update_character(selected_id, updated_data)
-                    st.success("Ficha atualizada!")
-                    st.rerun()
-                
-                if col_btn2.form_submit_button("🗑️ Deletar Personagem"):
-                    delete_character(selected_id)
-                    st.warning("Personagem removido.")
-                    st.rerun()
-        else:
-            st.subheader("✨ Criar Novo Personagem")
-            with st.form("new_char_form"):
-                nc1, nc2, nc3 = st.columns(3)
-                new_name = nc1.text_input("Nome do Personagem")
-                new_race = nc2.selectbox("Raça", ["Humano", "Elfo", "Anão", "Halfling"])
-                new_class = nc3.selectbox("Classe", ["Guerreiro", "Mago", "Clérigo", "Ladino"])
-                
-                if st.form_submit_button("Criar Ficha"):
-                    if new_name:
-                        init_data = {
-                            "name": new_name, "race": new_race, "char_class": new_class, "level": 1, "alignment": "Neutro", "xp": 0,
-                            "str_val": 10, "dex_val": 10, "con_val": 10, "int_val": 10, "wis_val": 10, "cha_val": 10,
-                            "hp_max": 10, "hp_current": 10, "ac": 10, "ba": 0,
-                            "jp_physical": 15, "jp_mental": 15, "jp_evasion": 15,
-                            "inventory": "", "gold_po": 0, "gold_pp": 0, "gold_pc": 0, "notes": ""
-                        }
-                        add_character(init_data)
-                        st.success(f"{new_name} entrou na aventura!")
-                        st.rerun()
-                    else:
-                        st.error("Dê um nome ao herói!")
-
-# --- TAB: DADOS ---
-with tab_dados:
-    st.subheader("🎲 Sala de Rolagem")
+with c_roll:
+    st.write("### Rolar Dados")
+    dice_mod = st.number_input("Modificador Geral", value=0)
     
-    c_roll, c_log = st.columns([1, 1])
+    cols = st.columns(3)
+    dice_types = [4, 6, 8, 10, 12, 20, 100]
     
-    with c_roll:
-        st.write("### Rolar Dados")
-        dice_mod = st.number_input("Modificador Geral", value=0)
-        
-        cols = st.columns(3)
-        dice_types = [4, 6, 8, 10, 12, 20, 100]
-        
-        for i, sides in enumerate(dice_types):
-            with cols[i % 3]:
-                if st.button(f"d{sides}"):
-                    val, total = roll_dice(sides, dice_mod)
-                    result_str = f"{total} ({val}{dice_mod:+})" if dice_mod != 0 else f"{val}"
-                    add_dice_log(player_name, f"d{sides}", result_str)
-                    st.toast(f"Resultado: {result_str}")
+    for i, sides in enumerate(dice_types):
+        with cols[i % 3]:
+            if st.button(f"Lançar d{sides}", key=f"btn_d{sides}"):
+                val, total = roll_dice(sides, dice_mod)
+                result_str = f"{total} ({val} + MOD:{dice_mod:+})" if dice_mod != 0 else f"{val}"
+                add_dice_log(player_name, f"d{sides}", result_str)
+                st.toast(f"Resultado: {result_str}")
 
+    with st.form("custom_roll_form", clear_on_submit=True):
         custom_roll = st.text_input("Rolagem Customizada (ex: 2d6+3)", "")
-        if st.button("Rolar Customizado"):
+        if st.form_submit_button("Rolar Customizado"):
              if custom_roll:
                  result_details = parse_custom_roll(custom_roll)
                  if result_details:
@@ -225,16 +135,59 @@ with tab_dados:
              else:
                  st.warning("Digite uma rolagem.")
 
-    with c_log:
-        st.write("### 📜 Histórico Global")
-        if st.button("🔄 Atualizar Log"):
-            st.rerun()
-            
-        logs = get_recent_logs(15)
+with c_log:
+    st.write("### 📜 Histórico Global")
+    
+    logs = get_recent_logs(15)
+    if logs:
+        now = datetime.now()
         for log in logs:
-            p, roll, res, time = log
-            st.markdown(f"**{p}** rolou `{roll}` → **{res}** <br><small style='color:grey'>{time}</small>", unsafe_allow_html=True)
+            p, roll, res, time_str = log
+            
+            # Calculate age of the log
+            try:
+                log_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                age = (now - log_time).total_seconds()
+            except:
+                age = 999
+            
+            # Calculate highlight opacity (fade out over 10 seconds)
+            if age < 10:
+                opacity = 0.4 * (1 - age / 10)
+                bg_style = f"background-color: rgba(144, 238, 144, {opacity:.2f});"
+                border_class = "log-entry-highlighted"
+            else:
+                bg_style = ""
+                border_class = ""
+            
+            # Parse the result string for squares
+            if '(' in res:
+                # Expected format: total (d1 + d2 + mod)
+                total, dice_part = res.split('(', 1)
+                total = total.strip()
+                dice_part = dice_part.rstrip(')')
+                # Split by + while keeping - as part of the number
+                # Regex to split by + or - but keep the - with the following number
+                parts = re.split(r'\s*\+\s*', dice_part)
+                dice_html = ""
+                for part in parts:
+                    clean_part = part.strip()
+                    if clean_part.startswith("MOD:"):
+                        mod_val = clean_part.replace("MOD:", "")
+                        dice_html += f'<span class="dice-square" style="border-color: #888; color: #aaa; font-size: 0.8em;">Mod: {mod_val}</span>'
+                    else:
+                        dice_html += f'<span class="dice-square">{clean_part}</span>'
+            else:
+                total = res
+                dice_html = f'<span class="dice-square">{res}</span>'
+
+            st.markdown(f"""
+                <div class="log-entry {border_class}" style="{bg_style}">
+                    <strong style="font-size: 1.1em;">{p}</strong> -> {dice_html}<br>
+                    <strong style="font-size: 1.2em;">Resultado</strong> -> <span style="font-size: 1.4em; font-weight: bold; color: #4CAF50;">{total}</span><br>
+                    <small style='color:grey; font-size: 0.8em;'>{time_str} | {roll}</small>
+                </div>
+            """, unsafe_allow_html=True)
             st.divider()
 
-st.sidebar.markdown("---")
-st.sidebar.info("Old Dragon 2 Manager v1.0")
+st.sidebar.info("Rolagem de Dados")
