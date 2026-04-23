@@ -46,6 +46,16 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # Map state table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS map_state (
+            cell_id TEXT PRIMARY KEY,
+            label TEXT,
+            color TEXT,
+            player_name TEXT,
+            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -115,3 +125,41 @@ def get_recent_logs(limit=20):
     data = c.fetchall()
     conn.close()
     return data
+
+# --- Map State Functions ---
+def update_map_cell(cell_id, label, color, player):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO map_state (cell_id, label, color, player_name, last_updated)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(cell_id) DO UPDATE SET
+            label=excluded.label,
+            color=excluded.color,
+            player_name=excluded.player_name,
+            last_updated=CURRENT_TIMESTAMP
+    ''', (cell_id, label, color, player))
+    conn.commit()
+    conn.close()
+
+def get_map_state():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT cell_id, label, color, player_name FROM map_state")
+    data = c.fetchall()
+    conn.close()
+    return {row[0]: {"label": row[1], "color": row[2], "player": row[3]} for row in data}
+
+def delete_map_cell(cell_id):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM map_state WHERE cell_id=?", (cell_id,))
+    conn.commit()
+    conn.close()
+
+def clear_map():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("DELETE FROM map_state")
+    conn.commit()
+    conn.close()
