@@ -1,24 +1,28 @@
-# 🐉 Old Dragon 2 - Gerenciador de Fichas e Rolagens
+# 🐉 RPG Manager - Rolagens e Mapa Tático
 
-Este projeto é um sistema simples e elegante para mestres e jogadores de **Old Dragon 2** gerenciarem suas fichas de personagem e realizarem rolagens de dados compartilhadas em tempo real.
+Este projeto é um sistema simples e elegante para mestres e jogadores de RPG gerenciarem suas sessões com rolagens de dados compartilhadas e um mapa tático interativo em tempo real.
 
 ## 🚀 Funcionalidades
 
-- **Gerenciamento de Fichas**: Crie, edite e remova fichas de personagem.
-- **Automação OD2**:
-    - Cálculo automático de modificadores de atributos (3-20).
-    - Cálculo automático de Jogadas de Proteção (Física, Mental e Esquiva) baseado no nível e atributos.
-- **Sala de Dados Compartilhada**:
-    - Role dados padrão (d4, d6, d8, d10, d12, d20, d100).
-    - Suporte para rolagens customizadas (ex: `2d6+4`).
-    - Histórico de rolagens global que aparece para todos os jogadores.
-- **Interface Premium**: Design escuro otimizado para sessões de RPG.
+- **Lobby de Entrada**: Identificação de personagem com travamento de nome (imutável após a entrada) e formatação automática (.title()).
+- **Sala de Rolagem Global**:
+    - Suporte para rolagens complexas com operadores matemáticos (`2d6+4`, `3d10*5`, `10d4/2`).
+    - Histórico global sincronizado em tempo real.
+    - Notificações (toasts) que aparecem para todos os jogadores quando alguém rola um dado, com persistência de 15 segundos.
+    - Exibição visual detalhada com dados individuais em destaque.
+- **Mapa Tático Interativo**:
+    - Grid de combate denso (24x24).
+    - Suporte para upload de mapas locais (JPG/PNG) pelo Mestre.
+    - Posicionamento de personagens e monstros com cores diferenciadas.
+    - Sincronização em tempo real entre todos os jogadores.
+- **Interface Premium**: Design escuro otimizado para sessões de RPG, com animações e destaques.
+- **Fuso Horário Local**: Registros de jogadas configurados para o horário de Brasília (UTC-3).
 
 ## 🛠️ Tecnologias Utilizadas
 
-- [Streamlit](https://streamlit.io/) - Interface web.
-- [SQLite](https://sqlite.org/) - Banco de dados local para persistência.
-- [Python](https://www.python.org/) - Lógica do sistema.
+- [Streamlit](https://streamlit.io/) - Interface web e sistema multi-páginas.
+- [SQLite](https://sqlite.org/) - Banco de dados local para persistência de rolagens e estado do mapa.
+- [Python 3.12+](https://www.python.org/) - Lógica do sistema.
 
 ## 📦 Como Instalar e Rodar
 
