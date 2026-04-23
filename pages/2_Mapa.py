@@ -120,15 +120,14 @@ else:
 map_image = st.session_state.get('map_image_url', "")
 
 # --- Map Rendering ---
-grid_size = 60 # Aumentado de 24 para 60
+grid_size = 32 # Otimizado para performance (1024 células)
 map_state = get_map_state()
-# Labels: Usando números para ambos para simplificar a visualização densa
 cols_labels = [str(i+1) for i in range(grid_size)]
 rows_labels = [str(i+1) for i in range(grid_size)]
 
 st.write(f"### Grid de Combate ({grid_size}x{grid_size})")
 
-# CSS dinâmico para o fundo do mapa
+# CSS dinâmico para o fundo do mapa e estilos básicos
 if map_image:
     st.markdown(f"""
         <style>
@@ -145,9 +144,9 @@ if map_image:
             background-color: rgba(30, 30, 30, 0.4) !important;
             color: white !important;
             border: 0.1px solid rgba(255,255,255,0.1) !important;
-            height: 18px !important;
+            height: 24px !important;
             padding: 0px !important;
-            font-size: 0.5em !important;
+            font-size: 0.6em !important;
             min-width: 0px !important;
         }}
         .stButton > button:hover {{
@@ -156,35 +155,29 @@ if map_image:
         </style>
     """, unsafe_allow_html=True)
 
+# OTIMIZAÇÃO: Injetar todos os estilos das células ocupadas de uma vez
+occupied_css = ""
+for cid, cdata in map_state.items():
+    color = cdata.get('color', 'green')
+    bg_color = "rgba(76, 175, 80, 0.8)" if color == "green" else "rgba(244, 67, 54, 0.8)"
+    if color == "blue": bg_color = "rgba(33, 150, 243, 0.8)"
+    occupied_css += f'button[key*="{cid}"] {{ background-color: {bg_color} !important; border: 1.5px solid white !important; font-weight: bold !important; }}\n'
+
+if occupied_css:
+    st.markdown(f"<style>{occupied_css}</style>", unsafe_allow_html=True)
+
 # Renderização do Grid
 main_cols = st.columns(grid_size)
 for i, col_label in enumerate(cols_labels):
     with main_cols[i]:
-        # Para um grid de 60, mostrar o label da coluna apenas no topo
         st.write(f"<p style='font-size:0.6em; text-align:center; margin:0;'>{col_label}</p>", unsafe_allow_html=True)
         for row_label in rows_labels:
             cell_id = f"C{col_label}R{row_label}"
             cell_data = map_state.get(cell_id)
             
-            label = ""
-            if cell_data:
-                label = cell_data['label']
-                # Cores baseadas no tipo
-                color = cell_data.get('color', 'green')
-                bg_color = "rgba(76, 175, 80, 0.7)" if color == "green" else "rgba(244, 67, 54, 0.7)"
-                if color == "blue": bg_color = "rgba(33, 150, 243, 0.7)"
-                
-                # Injetar estilo específico para este botão ocupado
-                st.markdown(f"""
-                    <style>
-                    button[key*="{cell_id}"] {{
-                        background-color: {bg_color} !important;
-                        border: 2px solid white !important;
-                    }}
-                    </style>
-                """, unsafe_allow_html=True)
+            label = cell_data['label'] if cell_data else " "
             
-            if st.button(label if label else " ", key=cell_id, use_container_width=True):
+            if st.button(label, key=cell_id, use_container_width=True):
                 if cell_data and (is_master or cell_data['player'] == player_name):
                     delete_map_cell(cell_id)
                     st.rerun()
