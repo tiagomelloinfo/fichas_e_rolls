@@ -120,7 +120,7 @@ else:
 map_image = st.session_state.get('map_image_url', "")
 
 # --- Map Rendering ---
-grid_size = 24 # Triplicado de 8 para 24
+grid_size = 60 # Aumentado de 24 para 60
 map_state = get_map_state()
 # Labels: Usando números para ambos para simplificar a visualização densa
 cols_labels = [str(i+1) for i in range(grid_size)]
@@ -145,9 +145,9 @@ if map_image:
             background-color: rgba(30, 30, 30, 0.4) !important;
             color: white !important;
             border: 0.1px solid rgba(255,255,255,0.1) !important;
-            height: 25px !important;
+            height: 18px !important;
             padding: 0px !important;
-            font-size: 0.6em !important;
+            font-size: 0.5em !important;
             min-width: 0px !important;
         }}
         .stButton > button:hover {{
@@ -160,7 +160,7 @@ if map_image:
 main_cols = st.columns(grid_size)
 for i, col_label in enumerate(cols_labels):
     with main_cols[i]:
-        # Para um grid de 24, mostrar o label da coluna apenas no topo
+        # Para um grid de 60, mostrar o label da coluna apenas no topo
         st.write(f"<p style='font-size:0.6em; text-align:center; margin:0;'>{col_label}</p>", unsafe_allow_html=True)
         for row_label in rows_labels:
             cell_id = f"C{col_label}R{row_label}"

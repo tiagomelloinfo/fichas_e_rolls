@@ -11,7 +11,7 @@ Este projeto é um sistema simples e elegante para mestres e jogadores de RPG ge
     - Notificações (toasts) que aparecem para todos os jogadores quando alguém rola um dado, com persistência de 15 segundos.
     - Exibição visual detalhada com dados individuais em destaque.
 - **Mapa Tático Interativo**:
-    - Grid de combate denso (24x24).
+    - Grid de combate denso (60x60).
     - Suporte para upload de mapas locais (JPG/PNG) pelo Mestre.
     - Posicionamento de personagens e monstros com cores diferenciadas.
     - Sincronização em tempo real entre todos os jogadores.
