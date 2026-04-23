@@ -97,17 +97,21 @@ def delete_character(char_id):
 
 # --- Dice Log Functions ---
 def add_dice_log(player, roll, result):
+    from datetime import timedelta, timezone
+    # Brazil/Sao Paulo is UTC-3 (currently no DST in Brazil)
+    br_tz = timezone(timedelta(hours=-3))
+    now_br = datetime.now(br_tz)
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("INSERT INTO dice_logs (player_name, roll_type, result, timestamp) VALUES (?, ?, ?, ?)",
-              (player, roll, result, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+              (player, roll, result, now_br.strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
 def get_recent_logs(limit=20):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT player_name, roll_type, result, timestamp FROM dice_logs ORDER BY timestamp DESC LIMIT ?", (limit,))
+    c.execute("SELECT id, player_name, roll_type, result, timestamp FROM dice_logs ORDER BY timestamp DESC LIMIT ?", (limit,))
     data = c.fetchall()
     conn.close()
     return data

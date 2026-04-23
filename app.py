@@ -63,28 +63,55 @@ def roll_dice(sides, modifier=0):
     return result, total
 
 def parse_custom_roll(roll_str):
-    # Regex for standard dice notation: [num]d[sides][+/-][mod]
-    pattern = r'^(\d+)?d(\d+)([+-]\d+)?$'
+    # Regex for standard dice notation: [num]d[sides][op][val]
+    # op can be +, -, * or /
+    pattern = r'^(\d+)?d(\d+)([\+\-\*\/]\d+)?$'
     clean_str = roll_str.replace(" ", "").lower()
     match = re.match(pattern, clean_str)
     
     if match:
         num = int(match.group(1)) if match.group(1) else 1
         sides = int(match.group(2))
-        mod = int(match.group(3)) if match.group(3) else 0
+        op_part = match.group(3)
         
         rolls = [random.randint(1, sides) for _ in range(num)]
-        total = sum(rolls) + mod
+        sum_rolls = sum(rolls)
+        
+        total = sum_rolls
+        op_display = ""
+        
+        if op_part:
+            op = op_part[0]
+            val = int(op_part[1:])
+            if op == '+':
+                total += val
+                op_display = f" + {val}"
+            elif op == '-':
+                total -= val
+                op_display = f" - {val}"
+            elif op == '*':
+                total *= val
+                op_display = f" * {val}"
+            elif op == '/':
+                if val != 0:
+                    total //= val
+                    op_display = f" / {val}"
         
         # Detail string for the log
         rolls_str = ' + '.join(map(str, rolls))
-        mod_str = f" + MOD:{mod:+}" if mod != 0 else ""
-        details = f"{total} ({rolls_str}{mod_str})"
+        if op_display:
+            details = f"{total} ({rolls_str}){op_display}"
+        else:
+            details = f"{total} ({rolls_str})"
         return details
     return None
 
 # --- Initialization ---
 init_db()
+
+if 'last_seen_log_id' not in st.session_state:
+    recent = get_recent_logs(1)
+    st.session_state.last_seen_log_id = recent[0][0] if recent else 0
 
 # --- App Title ---
 st.title("🎲 Rolagem de Dados")
@@ -99,41 +126,40 @@ st_autorefresh(interval=3000, limit=None, key="dice_refresh")
 
 st.subheader("🎲 Sala de Rolagem")
 
-# Player Name Input on the main page
-player_name = st.text_input("Seu Nome de Personagem / Jogador", value="Mestre")
+# Player Name Input with locking mechanism
+if 'player_name_locked' not in st.session_state:
+    st.session_state.player_name_locked = ""
+
+if not st.session_state.player_name_locked:
+    temp_name = st.text_input("Seu Nome de Personagem / Jogador", value="", placeholder="Digite seu nome e aperte Enter para travar...")
+    if temp_name:
+        st.session_state.player_name_locked = temp_name.strip().title()
+        st.rerun()
+    player_name = ""
+    st.warning("⚠️ Você precisa definir seu nome para começar a jogar.")
+else:
+    st.info(f"🎭 Jogando como: **{st.session_state.player_name_locked}**")
+    player_name = st.session_state.player_name_locked
 
 st.divider()
 
 c_roll, c_log = st.columns([1, 1])
 
 with c_roll:
-    st.write("### Rolar Dados")
-    dice_mod = st.number_input("Modificador Geral", value=0)
+    st.write("### 🎲 Rolar Dados")
     
-    cols = st.columns(3)
-    dice_types = [4, 6, 8, 10, 12, 20, 100]
-    
-    for i, sides in enumerate(dice_types):
-        with cols[i % 3]:
-            if st.button(f"Lançar d{sides}", key=f"btn_d{sides}"):
-                val, total = roll_dice(sides, dice_mod)
-                result_str = f"{total} ({val} + MOD:{dice_mod:+})" if dice_mod != 0 else f"{val}"
-                add_dice_log(player_name, f"d{sides}", result_str)
-                st.toast(f"Resultado: {result_str}")
-
     with st.form("custom_roll_form", clear_on_submit=True):
-        custom_roll = st.text_input("Rolagem Customizada (ex: 2d6+3)", "")
-        if st.form_submit_button("Rolar Customizado"):
+        custom_roll = st.text_input("Comando de Rolagem (ex: 2d6+3, d20, 1d100)", placeholder="Ex: 2d6+3")
+        if st.form_submit_button("Lançar Dados", disabled=not player_name):
              if custom_roll:
-                 result_details = parse_custom_roll(custom_roll)
-                 if result_details:
-                     add_dice_log(player_name, custom_roll, result_details)
-                     st.toast(f"Resultado: {result_details}")
-                     st.rerun()
-                 else:
-                     st.error("Formato inválido! Use algo como 2d6, 1d20+5 ou d10-1.")
+                  result_details = parse_custom_roll(custom_roll)
+                  if result_details:
+                      add_dice_log(player_name, custom_roll, result_details)
+                      st.rerun()
+                  else:
+                      st.error("Formato inválido! Use algo como 2d6, 1d20+5 ou d10-1.")
              else:
-                 st.warning("Digite uma rolagem.")
+                  st.warning("Digite o comando dos dados.")
 
 with c_log:
     st.write("### 📜 Histórico Global")
@@ -142,14 +168,16 @@ with c_log:
     if logs:
         now = datetime.now()
         for log in logs:
-            p, roll, res, time_str = log
+            log_id, p, roll, res, time_str = log
             
             # Calculate age of the log
             try:
                 log_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
                 age = (now - log_time).total_seconds()
+                display_time = log_time.strftime("%d/%m/%Y %H:%M")
             except:
                 age = 999
+                display_time = time_str
             
             # Calculate highlight opacity (fade out over 10 seconds)
             if age < 10:
@@ -162,32 +190,79 @@ with c_log:
             
             # Parse the result string for squares
             if '(' in res:
-                # Expected format: total (d1 + d2 + mod)
-                total, dice_part = res.split('(', 1)
-                total = total.strip()
-                dice_part = dice_part.rstrip(')')
-                # Split by + while keeping - as part of the number
-                # Regex to split by + or - but keep the - with the following number
-                parts = re.split(r'\s*\+\s*', dice_part)
+                # Format: total (d1 + d2 + ...) operator val
+                total_val, rest = res.split('(', 1)
+                total_val = total_val.strip()
+                
+                # Split at the closing parenthesis
+                if ')' in rest:
+                    dice_part, op_part = rest.split(')', 1)
+                else:
+                    dice_part, op_part = rest, ""
+                
+                # Render dice as squares
+                dice_parts = re.split(r'\s*\+\s*', dice_part)
                 dice_html = ""
-                for part in parts:
+                for part in dice_parts:
                     clean_part = part.strip()
-                    if clean_part.startswith("MOD:"):
-                        mod_val = clean_part.replace("MOD:", "")
-                        dice_html += f'<span class="dice-square" style="border-color: #888; color: #aaa; font-size: 0.8em;">Mod: {mod_val}</span>'
-                    else:
+                    if clean_part:
                         dice_html += f'<span class="dice-square">{clean_part}</span>'
+                
+                # Append operator if exists
+                if op_part.strip():
+                    dice_html += f' <span style="color: #888; font-weight: bold;">{op_part.strip()}</span>'
+                
+                total = total_val
             else:
                 total = res
                 dice_html = f'<span class="dice-square">{res}</span>'
 
             st.markdown(f"""
                 <div class="log-entry {border_class}" style="{bg_style}">
-                    <strong style="font-size: 1.1em;">{p}</strong> -> {dice_html}<br>
+                    <strong style="font-size: 1.1em;">{p}</strong> jogou <code>{roll}</code> -> {dice_html}<br>
                     <strong style="font-size: 1.2em;">Resultado</strong> -> <span style="font-size: 1.4em; font-weight: bold; color: #4CAF50;">{total}</span><br>
-                    <small style='color:grey; font-size: 0.8em;'>{time_str} | {roll}</small>
+                    <small style='color:grey; font-size: 0.8em;'>{display_time}</small>
                 </div>
             """, unsafe_allow_html=True)
             st.divider()
 
 st.sidebar.info("Rolagem de Dados")
+
+# --- Global Toasts Logic (Persistent for 15s) ---
+if 'toasts_queue' not in st.session_state:
+    st.session_state.toasts_queue = {} # {log_id: (msg, timestamp)}
+
+def check_for_new_rolls():
+    import time
+    now = time.time()
+    
+    # 1. Check for new rolls in DB
+    recent_logs = get_recent_logs(10)
+    if recent_logs:
+        for log in reversed(recent_logs):
+            log_id, p, roll, res, time_str = log
+            if log_id > st.session_state.last_seen_log_id:
+                # Parse "total (d1 + d2 + ...)"
+                if '(' in res:
+                    total_val, details = res.split('(', 1)
+                    total_val = total_val.strip()
+                    details = details.rstrip(')')
+                    msg = f"🎲 **{p}** rolou **{roll}**\n\nDados: `{details}`\n\nTotal: **{total_val}**"
+                else:
+                    msg = f"🎲 **{p}** rolou **{roll}**\n\nTotal: **{res}**"
+                
+                st.session_state.toasts_queue[log_id] = (msg, now)
+                st.session_state.last_seen_log_id = log_id
+    
+    # 2. Display all active toasts and cleanup
+    to_delete = []
+    for lid, (msg, ts) in list(st.session_state.toasts_queue.items()):
+        if now - ts < 15:
+            st.toast(msg)
+        else:
+            to_delete.append(lid)
+    
+    for lid in to_delete:
+        del st.session_state.toasts_queue[lid]
+
+check_for_new_rolls()
