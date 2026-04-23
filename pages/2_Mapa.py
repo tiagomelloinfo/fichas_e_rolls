@@ -120,7 +120,7 @@ else:
 map_image = st.session_state.get('map_image_url', "")
 
 # --- Map Rendering ---
-grid_size = 32 # Otimizado para performance (1024 células)
+grid_size = 40 # Equilíbrio ideal entre detalhe e performance (1600 células)
 map_state = get_map_state()
 cols_labels = [str(i+1) for i in range(grid_size)]
 rows_labels = [str(i+1) for i in range(grid_size)]
@@ -133,8 +133,9 @@ if map_image:
         <style>
         [data-testid="stHorizontalBlock"] {{
             background-image: url('{map_image}');
-            background-size: cover;
+            background-size: 100% 100%;
             background-position: center;
+            background-repeat: no-repeat;
             padding: 5px;
             border-radius: 5px;
             border: 1px solid #444;
@@ -144,9 +145,9 @@ if map_image:
             background-color: rgba(30, 30, 30, 0.4) !important;
             color: white !important;
             border: 0.1px solid rgba(255,255,255,0.1) !important;
-            height: 24px !important;
+            height: 22px !important;
             padding: 0px !important;
-            font-size: 0.6em !important;
+            font-size: 0.55em !important;
             min-width: 0px !important;
         }}
         .stButton > button:hover {{
